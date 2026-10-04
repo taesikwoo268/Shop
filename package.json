@@ -1,0 +1,30 @@
+{
+  "name": "shop-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/server.js",
+    "start": "bun src/server.js",
+    "test": "bun test",
+    "admin:create": "bun src/scripts/create-admin.js",
+    "db:seed": "bun src/scripts/seed.js",
+    "prisma:generate": "bunx prisma generate --schema prisma",
+    "prisma:migrate": "bunx prisma migrate dev --schema prisma",
+    "prisma:studio": "bunx prisma studio --schema prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.3",
+    "bcrypt": "^6.0.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pino": "^9.9.5",
+    "pino-http": "^10.5.0",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "prisma": "^6.16.3"
+  }
+}
