@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { prisma } from "../database/prisma.js";
 import { hashPassword } from "../utils/password.js";
 

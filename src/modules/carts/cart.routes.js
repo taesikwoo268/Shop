@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../../http/router.js";
 import { authenticate } from "../../middlewares/authentication.middleware.js";
 import { validate } from "../../middlewares/validation.middleware.js";
 import { asyncHandler } from "../../utils/async-handler.js";

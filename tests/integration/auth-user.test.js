@@ -8,6 +8,7 @@ let baseUrl;
 const testEmails = [];
 const testCategoryIds = [];
 const testProductIds = [];
+const testOrderIds = [];
 
 const createEmail = () => {
   const email = `integration-${randomUUID()}@example.test`;
@@ -35,10 +36,8 @@ const register = (email, password = "StrongPass123!") =>
   });
 
 beforeAll(async () => {
-  server = app.listen(0);
-  await new Promise((resolve) => server.once("listening", resolve));
-  const address = server.address();
-  baseUrl = `http://127.0.0.1:${address.port}/api/v1`;
+  server = Bun.serve({ port: 0, fetch: app.fetch });
+  baseUrl = `http://127.0.0.1:${server.port}/api/v1`;
 });
 
 describe("API documentation", () => {
@@ -59,15 +58,14 @@ describe("API documentation", () => {
 });
 
 afterAll(async () => {
+  await prisma.order.deleteMany({ where: { id: { in: testOrderIds } } });
   await prisma.product.deleteMany({ where: { id: { in: testProductIds } } });
   await prisma.category.deleteMany({
     where: { id: { in: testCategoryIds }, parentId: { not: null } },
   });
   await prisma.category.deleteMany({ where: { id: { in: testCategoryIds } } });
   await prisma.user.deleteMany({ where: { email: { in: testEmails } } });
-  await new Promise((resolve, reject) =>
-    server.close((error) => (error ? reject(error) : resolve())),
-  );
+  await server.stop(true);
   await prisma.$disconnect();
 });
 
@@ -682,5 +680,150 @@ describe("Cart API", () => {
     });
     expect(cleared.status).toBe(200);
     expect(cleared.body.data.summary.itemCount).toBe(0);
+  });
+});
+
+describe("Order API", () => {
+  test("creates orders atomically, reserves stock, clears cart, and manages status", async () => {
+    const adminEmail = createEmail();
+    await register(adminEmail);
+    const adminRole = await prisma.role.upsert({
+      where: { name: "ADMIN" },
+      update: {},
+      create: { name: "ADMIN" },
+    });
+    await prisma.user.update({
+      where: { email: adminEmail },
+      data: { roleId: adminRole.id },
+    });
+    const adminLogin = await request("/auth/login", {
+      method: "POST",
+      body: { email: adminEmail, password: "StrongPass123!" },
+    });
+    const adminToken = adminLogin.body.data.tokens.accessToken;
+
+    const suffix = randomUUID().slice(0, 8);
+    const category = await request("/admin/categories", {
+      method: "POST",
+      token: adminToken,
+      body: { name: `Order Category ${suffix}` },
+    });
+    testCategoryIds.push(category.body.data.id);
+
+    const product = await request("/admin/products", {
+      method: "POST",
+      token: adminToken,
+      body: {
+        name: `Order Product ${suffix}`,
+        categoryId: category.body.data.id,
+        variants: [{ name: "Default", sku: `ORDER-${suffix}`, price: "200000.00", quantity: 5 }],
+      },
+    });
+    expect(product.status).toBe(201);
+    testProductIds.push(product.body.data.id);
+    const variantId = product.body.data.variants[0].id;
+
+    const customerEmail = createEmail();
+    const customer = await register(customerEmail);
+    const customerToken = customer.body.data.tokens.accessToken;
+    const address = await request("/users/me/addresses", {
+      method: "POST",
+      token: customerToken,
+      body: {
+        recipientName: "Order Customer",
+        phone: "0901234567",
+        addressLine: "123 Nguyen Hue",
+        ward: "Ben Nghe",
+        district: "District 1",
+        province: "Ho Chi Minh City",
+      },
+    });
+    const addressId = address.body.data.id;
+
+    await request("/cart/items", {
+      method: "POST",
+      token: customerToken,
+      body: { variantId, quantity: 2 },
+    });
+    const firstOrder = await request("/orders", {
+      method: "POST",
+      token: customerToken,
+      body: { addressId, note: "Please call before delivery" },
+    });
+    expect(firstOrder.status).toBe(201);
+    expect(firstOrder.body.data.status).toBe("PENDING");
+    expect(firstOrder.body.data.items[0].productName).toBe(`Order Product ${suffix}`);
+    expect(firstOrder.body.data.items[0].unitPrice).toBe("200000");
+    expect(firstOrder.body.data.total).toBe("400000");
+    testOrderIds.push(firstOrder.body.data.id);
+
+    const emptyCart = await request("/cart", { token: customerToken });
+    expect(emptyCart.body.data.summary.itemCount).toBe(0);
+    const reservedAfterCreate = await prisma.inventory.findUnique({ where: { variantId } });
+    expect(reservedAfterCreate.reservedQuantity).toBe(2);
+
+    const ownOrders = await request("/orders", { token: customerToken });
+    expect(ownOrders.status).toBe(200);
+    expect(ownOrders.body.data.items[0].id).toBe(firstOrder.body.data.id);
+
+    const cancelled = await request(`/orders/${firstOrder.body.data.id}/cancel`, {
+      method: "POST",
+      token: customerToken,
+    });
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.body.data.status).toBe("CANCELLED");
+    const reservedAfterCancel = await prisma.inventory.findUnique({ where: { variantId } });
+    expect(reservedAfterCancel.reservedQuantity).toBe(0);
+
+    await request("/cart/items", {
+      method: "POST",
+      token: customerToken,
+      body: { variantId, quantity: 3 },
+    });
+    const secondOrder = await request("/orders", {
+      method: "POST",
+      token: customerToken,
+      body: { addressId },
+    });
+    expect(secondOrder.status).toBe(201);
+    testOrderIds.push(secondOrder.body.data.id);
+
+    const confirmed = await request(`/admin/orders/${secondOrder.body.data.id}/status`, {
+      method: "PATCH",
+      token: adminToken,
+      body: { status: "CONFIRMED" },
+    });
+    expect(confirmed.status).toBe(200);
+    const processing = await request(`/admin/orders/${secondOrder.body.data.id}/status`, {
+      method: "PATCH",
+      token: adminToken,
+      body: { status: "PROCESSING" },
+    });
+    expect(processing.status).toBe(200);
+
+    const lateCancel = await request(`/orders/${secondOrder.body.data.id}/cancel`, {
+      method: "POST",
+      token: customerToken,
+    });
+    expect(lateCancel.status).toBe(409);
+
+    const shipped = await request(`/admin/orders/${secondOrder.body.data.id}/status`, {
+      method: "PATCH",
+      token: adminToken,
+      body: { status: "SHIPPED" },
+    });
+    expect(shipped.status).toBe(200);
+    const delivered = await request(`/admin/orders/${secondOrder.body.data.id}/status`, {
+      method: "PATCH",
+      token: adminToken,
+      body: { status: "DELIVERED" },
+    });
+    expect(delivered.status).toBe(200);
+
+    const adminOrders = await request("/admin/orders?status=DELIVERED", {
+      token: adminToken,
+    });
+    expect(adminOrders.status).toBe(200);
+    expect(adminOrders.body.data.items.some((order) => order.id === secondOrder.body.data.id)).toBe(true);
   });
 });

@@ -29,6 +29,7 @@ model User {
   refreshTokens RefreshToken[]
   addresses     Address[]
   cart          Cart?
+  orders        Order[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 

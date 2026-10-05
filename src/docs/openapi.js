@@ -78,6 +78,8 @@ export const openApiDocument = {
     { name: "Categories" },
     { name: "Products" },
     { name: "Cart" },
+    { name: "Orders" },
+    { name: "Admin Orders" },
     { name: "Admin Categories" },
     { name: "Admin Products" },
   ],
@@ -340,6 +342,57 @@ export const openApiDocument = {
           200: success("Cart item deleted", { $ref: "#/components/schemas/Cart" }),
           ...protectedErrors,
         },
+      },
+    },
+    "/orders": {
+      get: {
+        tags: ["Orders"], summary: "List current user orders", security: bearerSecurity,
+        parameters: [
+          ...paginationParameters,
+          { name: "status", in: "query", schema: { $ref: "#/components/schemas/OrderStatus" } },
+        ],
+        responses: { 200: success("Orders retrieved", { $ref: "#/components/schemas/OrderList" }), ...protectedErrors },
+      },
+      post: {
+        tags: ["Orders"], summary: "Create an order from the current cart", security: bearerSecurity,
+        requestBody: jsonRequest({ $ref: "#/components/schemas/CreateOrderRequest" }),
+        responses: { 201: success("Order created", { $ref: "#/components/schemas/Order" }), ...protectedErrors, 409: errorResponse("Cart empty or stock unavailable") },
+      },
+    },
+    "/orders/{id}": {
+      get: {
+        tags: ["Orders"], summary: "Get an owned order", security: bearerSecurity,
+        parameters: [pathParameter("id", "Order identifier")],
+        responses: { 200: success("Order retrieved", { $ref: "#/components/schemas/Order" }), ...protectedErrors },
+      },
+    },
+    "/orders/{id}/cancel": {
+      post: {
+        tags: ["Orders"], summary: "Cancel a pending or confirmed order", security: bearerSecurity,
+        parameters: [pathParameter("id", "Order identifier")],
+        responses: { 200: success("Order cancelled", { $ref: "#/components/schemas/Order" }), ...protectedErrors, 409: errorResponse("Order cannot be cancelled") },
+      },
+    },
+    "/admin/orders": {
+      get: {
+        tags: ["Admin Orders"], summary: "List all orders", security: bearerSecurity,
+        parameters: [...paginationParameters, { name: "status", in: "query", schema: { $ref: "#/components/schemas/OrderStatus" } }],
+        responses: { 200: success("Orders retrieved", { $ref: "#/components/schemas/OrderList" }), ...adminErrors },
+      },
+    },
+    "/admin/orders/{id}": {
+      get: {
+        tags: ["Admin Orders"], summary: "Get any order", security: bearerSecurity,
+        parameters: [pathParameter("id", "Order identifier")],
+        responses: { 200: success("Order retrieved", { $ref: "#/components/schemas/Order" }), ...adminErrors },
+      },
+    },
+    "/admin/orders/{id}/status": {
+      patch: {
+        tags: ["Admin Orders"], summary: "Change order status", security: bearerSecurity,
+        parameters: [pathParameter("id", "Order identifier")],
+        requestBody: jsonRequest({ type: "object", required: ["status"], properties: { status: { $ref: "#/components/schemas/OrderStatus" } } }),
+        responses: { 200: success("Order status updated", { $ref: "#/components/schemas/Order" }), ...adminErrors, 409: errorResponse("Invalid status transition") },
       },
     },
     "/admin/categories": {
@@ -837,6 +890,22 @@ export const openApiDocument = {
           },
           updatedAt: { type: "string", format: "date-time" },
         },
+      },
+      OrderStatus: { type: "string", enum: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"] },
+      CreateOrderRequest: {
+        type: "object", required: ["addressId"],
+        properties: { addressId: { type: "string" }, note: { type: "string", nullable: true, maxLength: 500 } },
+      },
+      OrderItem: {
+        type: "object",
+        properties: { id: { type: "string" }, variantId: { type: "string", nullable: true }, productName: { type: "string" }, variantName: { type: "string" }, sku: { type: "string" }, unitPrice: { type: "string" }, quantity: { type: "integer" }, subtotal: { type: "string" } },
+      },
+      Order: {
+        type: "object",
+        properties: { id: { type: "string" }, orderNumber: { type: "string" }, userId: { type: "string" }, status: { $ref: "#/components/schemas/OrderStatus" }, subtotal: { type: "string" }, shippingFee: { type: "string" }, total: { type: "string" }, recipientName: { type: "string" }, phone: { type: "string" }, addressLine: { type: "string" }, ward: { type: "string" }, district: { type: "string" }, province: { type: "string" }, postalCode: { type: "string", nullable: true }, note: { type: "string", nullable: true }, items: { type: "array", items: { $ref: "#/components/schemas/OrderItem" } }, createdAt: { type: "string", format: "date-time" }, updatedAt: { type: "string", format: "date-time" } },
+      },
+      OrderList: {
+        type: "object", properties: { items: { type: "array", items: { $ref: "#/components/schemas/Order" } }, pagination: { $ref: "#/components/schemas/Pagination" } },
       },
     },
   },

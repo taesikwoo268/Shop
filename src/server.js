@@ -3,12 +3,22 @@ import { appConfig } from "./config/app.config.js";
 import { prisma } from "./database/prisma.js";
 import { logger } from "./utils/logger.js";
 
-const server = app.listen(appConfig.port, () => {
-  logger.info(
-    { port: appConfig.port, env: appConfig.env },
-    `Server is running at http://localhost:${appConfig.port}${appConfig.apiPrefix}`,
-  );
+const server = Bun.serve({
+  port: appConfig.port,
+  fetch: app.fetch,
+  error(error) {
+    logger.error({ err: error }, "Unhandled HTTP error");
+    return Response.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 },
+    );
+  },
 });
+
+logger.info(
+  { port: server.port, env: appConfig.env },
+  `Server is running at ${server.url}${appConfig.apiPrefix.slice(1)}`,
+);
 
 let isShuttingDown = false;
 
@@ -17,11 +27,10 @@ const shutdown = async (signal) => {
   isShuttingDown = true;
 
   logger.info({ signal }, "Graceful shutdown started");
-  server.close(async () => {
-    await prisma.$disconnect();
-    logger.info("Server stopped");
-    process.exit(0);
-  });
+  await server.stop();
+  await prisma.$disconnect();
+  logger.info("Server stopped");
+  process.exit(0);
 };
 
 process.on("SIGINT", () => shutdown("SIGINT"));

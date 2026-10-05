@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../http/router.js";
 import { adminRouter } from "../modules/admin/admin.routes.js";
 import { authRouter } from "../modules/auth/auth.routes.js";
 import { cartRouter } from "../modules/carts/cart.routes.js";

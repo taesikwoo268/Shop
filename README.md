@@ -1,6 +1,6 @@
 # Shop Backend
 
-Modular e-commerce REST API built with Bun, Express, Prisma, and MySQL.
+Modular e-commerce REST API built with Bun.serve, Prisma, and PostgreSQL.
 
 ## Setup
 
@@ -14,13 +14,8 @@ bun run dev
 
 Configure the PostgreSQL connection and JWT secrets in `.env` before running Prisma commands.
 
-For this database-engine switch, the previous MySQL migrations are preserved in
-`prisma/migrations.mysql-archive-20261005`. After PostgreSQL is running, create
-the new PostgreSQL migration with:
-
-```powershell
-bun run prisma:migrate -- --name init_postgresql
-```
+Environment files are loaded automatically by Bun; the application does not
+require `dotenv`. HTTP requests are handled directly by `Bun.serve()`.
 
 ## API documentation
 
@@ -80,6 +75,13 @@ POST   /api/v1/cart/items
 PATCH  /api/v1/cart/items/:itemId
 DELETE /api/v1/cart/items/:itemId
 DELETE /api/v1/cart
+POST   /api/v1/orders
+GET    /api/v1/orders
+GET    /api/v1/orders/:id
+POST   /api/v1/orders/:id/cancel
+GET    /api/v1/admin/orders
+GET    /api/v1/admin/orders/:id
+PATCH  /api/v1/admin/orders/:id/status
 ```
 
 `GET /api/v1/users/me` requires an access token:
