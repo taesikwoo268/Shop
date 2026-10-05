@@ -12,14 +12,11 @@ const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? "admin@shop.test")
 const customerEmail = (process.env.SEED_CUSTOMER_EMAIL ?? "customer@shop.test")
   .trim()
   .toLowerCase();
-const adminPassword = process.env.SEED_ADMIN_PASSWORD;
-const customerPassword = process.env.SEED_CUSTOMER_PASSWORD;
+const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "Admin@123456";
+const customerPassword = process.env.SEED_CUSTOMER_PASSWORD ?? "Customer@123456";
 
-if (!adminPassword || adminPassword.length < 8) {
-  throw new Error("SEED_ADMIN_PASSWORD must contain at least 8 characters");
-}
-if (!customerPassword || customerPassword.length < 8) {
-  throw new Error("SEED_CUSTOMER_PASSWORD must contain at least 8 characters");
+if (adminPassword.length < 8 || customerPassword.length < 8) {
+  throw new Error("Seed passwords must contain at least 8 characters");
 }
 
 const [adminPasswordHash, customerPasswordHash] = await Promise.all([

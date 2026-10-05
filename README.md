@@ -12,7 +12,15 @@ bun run prisma:migrate -- --name init
 bun run dev
 ```
 
-Configure the MySQL connection and JWT secrets in `.env` before running Prisma commands.
+Configure the PostgreSQL connection and JWT secrets in `.env` before running Prisma commands.
+
+For this database-engine switch, the previous MySQL migrations are preserved in
+`prisma/migrations.mysql-archive-20261005`. After PostgreSQL is running, create
+the new PostgreSQL migration with:
+
+```powershell
+bun run prisma:migrate -- --name init_postgresql
+```
 
 ## API documentation
 
